@@ -4,7 +4,8 @@ import * as chalk from "chalk";
 /*
   TODO:
 
-  - Collision with tail
+  - Collision with tail ✅
+  - Don't allow apples to spawn below tail or player ✅
   - Better way to grow after eating apples. Actually it is "freezing" the tail
   - Menu Screen
   - Game Over Screen
@@ -110,6 +111,9 @@ const nextPlayer = (player: PlayerState): PlayerState => ({
     : undefined,
 });
 
+const getPlayerPositions = (player?: PlayerState): Array<[number, number]> =>
+  player ? [[player.x, player.y], ...getPlayerPositions(player.tail)] : [];
+
 const next = (state: State): State => {
   const newPlayer = nextPlayer(state.player);
 
@@ -122,19 +126,34 @@ const next = (state: State): State => {
     return reset();
   }
 
+  const tailPositions = getPlayerPositions(newPlayer.tail);
+
+  if (tailPositions.some(([x, y]) => x === newPlayer.x && y === newPlayer.y)) {
+    return reset();
+  }
+
   const newState = {
     ...state,
     player: newPlayer,
   };
 
   if (state.player.x === state.apple.x && state.player.y === state.apple.y) {
+    const playerPositions = getPlayerPositions(newPlayer);
+
+    let newApple = reset().apple;
+
+    while (
+      playerPositions.some(([x, y]) => x === newApple.x && y === newApple.y)
+    ) {
+      newApple = reset().apple;
+    }
     return {
       ...newState,
       player: {
         ...newState.player,
         tail: { ...state.player },
       },
-      apple: reset().apple,
+      apple: newApple,
     };
   }
 
@@ -151,14 +170,11 @@ const setPlayerDirection =
     },
   });
 
-const getPlayerPositions = (player?: PlayerState): Array<[number, number]> =>
-  player ? [[player.x, player.y], ...getPlayerPositions(player.tail)] : [];
-
 const draw = (state: State, rd: readline.ReadLine) => {
-  const lines: Array<string> = [];
+  const lines = new Array<string>(state.rows);
 
   for (let y = 0; y < state.rows; y++) {
-    lines.push("");
+    lines[y] = "";
     for (let x = 0; x < state.columns; x++) {
       if (
         x === 0 ||
@@ -171,7 +187,7 @@ const draw = (state: State, rd: readline.ReadLine) => {
       }
 
       if (state.player.x === x && state.player.y === y) {
-        lines[y] = lines[y] + chalk.bgGreen("  ");
+        lines[y] = lines[y] + chalk.bgCyan("  ");
         continue;
       }
 
