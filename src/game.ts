@@ -7,6 +7,7 @@ import { random } from "./utils";
   - Don't allow apples to spawn below tail or player ✅
   - Use cursors to rewrite only changed "pixels" ✅
   - Implement "old direction" to use when pressing keys to avoid allowing direction invertion while pressing allowed direction and then pressing unallowed direction in the same frame. ✅
+  - Old states and tails should be moved to arrays instead of being nested.
   - Menu Screen
   - Game Over Screen
   - Score
@@ -159,18 +160,18 @@ export function movePlayer(player: Player): Player {
   };
 }
 
-const hasPlayerHitTail = ({ player }: Game) =>
+const hasPlayerHitTail = ({ player }: Game): boolean =>
   playerPositions(player.tail).some(
     ([x, y]) => player.x === x && player.y === y
   );
 
-const hasPlayerHitBoard = ({ player, board }: Game) =>
+const hasPlayerHitBoard = ({ player, board }: Game): boolean =>
   player.x <= 0 ||
   player.x >= board.columns ||
   player.y <= 0 ||
   player.y >= board.rows;
 
-export function hasPlayerHitApple({ player, apple }: Game) {
+export function hasPlayerHitApple({ player, apple }: Game): boolean {
   return player.x === apple.x && player.y === apple.y;
 }
 
@@ -187,7 +188,7 @@ export function nextFrame(game: Game): Game {
   if (hasPlayerFailed(newGame)) {
     return {
       // Return game instead of newGame because this can be Game Over screen,
-      // so the snake head will not be above the object it hit.
+      // so the snake head will not hide the object it hit.
       ...game,
       gameOver: true,
     };
