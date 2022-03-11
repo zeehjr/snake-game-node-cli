@@ -165,9 +165,9 @@ const hasPlayerHitTail = ({ player }: Game) =>
   );
 
 const hasPlayerHitBoard = ({ player, board }: Game) =>
-  player.x < 0 ||
+  player.x <= 0 ||
   player.x >= board.columns ||
-  player.y < 0 ||
+  player.y <= 0 ||
   player.y >= board.rows;
 
 export function hasPlayerHitApple({ player, apple }: Game) {
