@@ -1,21 +1,5 @@
 import * as readline from "readline";
-import * as chalk from "chalk";
-
-/*
-  TODO:
-
-  - Collision with tail ✅
-  - Don't allow apples to spawn below tail or player ✅
-  - Better way to grow after eating apples. Actually it is "freezing" the tail
-  - Menu Screen
-  - Game Over Screen
-  - Score
-  - Leaderboard
-  - Implement "old direction" to use when pressing keys to avoid allowing direction invertion while pressing allowed direction and then pressing unallowed direction in the same frame.
-  - Use cursors to rewrite only changed "pixels"
-  - Refactor with better practices
-
-*/
+import chalk from "chalk";
 
 type PlayerDirection = "UP" | "DOWN" | "LEFT" | "RIGHT";
 
@@ -37,6 +21,8 @@ type State = {
   rows: number;
   player: PlayerState;
   apple: AppleState;
+  screen?: Array<Array<string>>;
+  oldScreen?: Array<Array<string>>;
 };
 
 const getTableBoundings = () => ({
@@ -49,6 +35,8 @@ const refreshTableBoundings = (state: State): State => {
 
   return {
     ...state,
+    oldScreen: undefined,
+    screen: undefined,
     rows: boundings.height,
     columns: boundings.width,
   };
@@ -85,6 +73,52 @@ const reset = (): State => {
     },
     rows: boundings.height,
     columns: boundings.width,
+  };
+};
+
+const createScreen = (state: State): State => {
+  const lines = new Array<Array<string>>(state.rows);
+
+  for (let y = 0; y < state.rows; y++) {
+    lines[y] = new Array<string>(state.columns);
+    for (let x = 0; x < state.columns; x++) {
+      if (
+        x === 0 ||
+        x === state.columns - 1 ||
+        y === 0 ||
+        y === state.rows - 1
+      ) {
+        lines[y][x] = chalk.bgWhite("  ");
+        continue;
+      }
+
+      if (state.player.x === x && state.player.y === y) {
+        lines[y][x] = chalk.bgCyan("  ");
+        continue;
+      }
+
+      if (
+        getPlayerPositions(state.player).some(
+          ([tailX, tailY]) => x === tailX && y === tailY
+        )
+      ) {
+        lines[y][x] = chalk.bgYellow("  ");
+        continue;
+      }
+
+      if (state.apple.x === x && state.apple.y === y) {
+        lines[y][x] = chalk.bgRed("  ");
+        continue;
+      }
+
+      lines[y][x] = chalk.bgBlack("  ");
+    }
+  }
+
+  return {
+    ...state,
+    oldScreen: state.screen,
+    screen: lines,
   };
 };
 
@@ -170,63 +204,42 @@ const setPlayerDirection =
     },
   });
 
-const draw = (state: State, rd: readline.ReadLine) => {
-  const lines = new Array<string>(state.rows);
+const draw = (state: State) => {
+  if (!state.screen) {
+    return;
+  }
 
-  for (let y = 0; y < state.rows; y++) {
-    lines[y] = "";
+  if (!state.oldScreen) console.clear();
+
+  for (let y = 0; y < state.screen.length; y++) {
+    const currentLine = state.screen[y];
+    const oldLine = state.oldScreen?.[y];
+
     for (let x = 0; x < state.columns; x++) {
-      if (
-        x === 0 ||
-        x === state.columns - 1 ||
-        y === 0 ||
-        y === state.rows - 1
-      ) {
-        lines[y] = lines[y] + chalk.bgWhite("  ");
-        continue;
-      }
+      const currentChar = currentLine[x];
+      const oldChar = oldLine?.[x];
 
-      if (state.player.x === x && state.player.y === y) {
-        lines[y] = lines[y] + chalk.bgCyan("  ");
-        continue;
+      if (currentChar !== oldChar) {
+        process.stdout.cursorTo(x * 2, y);
+        process.stdout.write(currentChar);
       }
-
-      if (
-        getPlayerPositions(state.player).some(
-          ([tailX, tailY]) => x === tailX && y === tailY
-        )
-      ) {
-        lines[y] = lines[y] + chalk.bgYellow("  ");
-        continue;
-      }
-
-      if (state.apple.x === x && state.apple.y === y) {
-        lines[y] = lines[y] + chalk.bgRed("  ");
-        continue;
-      }
-
-      lines[y] = lines[y] + chalk.bgBlack("  ");
     }
+
+    process.stdout.cursorTo(0, 0);
   }
 
   process.stdout.cursorTo(0, 0);
-
-  for (const line of lines.slice(0, lines.length - 1)) {
-    console.log(line);
-  }
-
-  process.stdout.write(lines[lines.length - 1]);
 };
 
 const snakeGame = () => {
   let state = reset();
 
-  const rd = readline.createInterface(process.stdin, process.stdout);
+  readline.createInterface(process.stdin, process.stdout);
 
   const handleInterval = () => {
-    state = next(state);
+    state = createScreen(next(state));
 
-    draw(state, rd);
+    draw(state);
   };
 
   const INTERVAL_MS = 100;
@@ -268,11 +281,11 @@ const snakeGame = () => {
   });
 
   process.stdout.on("resize", () => {
-    state = refreshTableBoundings(state);
-    draw(state, rd);
+    state = createScreen(refreshTableBoundings(state));
+    draw(state);
   });
 
-  draw(state, rd);
+  draw(state);
 };
 
 snakeGame();
