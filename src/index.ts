@@ -8,6 +8,7 @@ import {
 } from "./game";
 import * as readline from "readline";
 import chalk from "chalk";
+import { isSome } from "fp-ts/lib/Option";
 
 readline.createInterface(process.stdin, process.stdout);
 
@@ -109,10 +110,7 @@ process.stdin.on("keypress", (e, key) => {
   const forbiddenDirection = tailDirection(game.player);
   const newDirection = directionByInputKeyName(key.name);
 
-  if (
-    forbiddenDirection._tag === "Some" &&
-    forbiddenDirection.value === newDirection
-  ) {
+  if (isSome(forbiddenDirection) && forbiddenDirection.value === newDirection) {
     return;
   }
 

@@ -1,6 +1,9 @@
 import { pipe } from "fp-ts/lib/function";
 import * as O from "fp-ts/lib/Option";
+import * as Eq from "fp-ts/lib/Eq";
+import * as N from "fp-ts/lib/number";
 import { random } from "./utils";
+import { and, or, Predicate } from "fp-ts/lib/Predicate";
 
 /*
   TODO:
@@ -18,6 +21,8 @@ import { random } from "./utils";
 */
 
 export type Position = [x: number, y: number];
+
+const eqPosition = Eq.tuple<Position>(N.Eq, N.Eq);
 
 export enum Tile {
   Ground = 0,
@@ -121,7 +126,9 @@ export function isPositionOcuppiedByPlayer(
 ): boolean {
   const positions = playerPositions(player);
 
-  return positions.some(([pX, pY]) => pX === x && pY === y);
+  return positions.some((position) =>
+    eqPosition.equals(player.position, position)
+  );
 }
 
 export function createApple(game: Pick<Game, "board" | "player">): Apple {
@@ -167,13 +174,10 @@ export function movePlayer(player: Player): Player {
   };
 }
 
-const hasPlayerHitTail = ({
-  player: {
-    tail,
-    position: [playerX, playerY],
-  },
-}: Game): boolean =>
-  playerPositions(tail).some(([x, y]) => playerX === x && playerY === y);
+const hasPlayerHitTail = ({ player }: Game): boolean =>
+  playerPositions(player.tail).some((tailPosition) =>
+    eqPosition.equals(player.position, tailPosition)
+  );
 
 const hasPlayerHitBoard = ({
   player: {
@@ -186,15 +190,10 @@ const hasPlayerHitBoard = ({
   playerY < 0 ||
   playerY >= board.rows;
 
-export function hasPlayerHitApple({ player, apple }: Game): boolean {
-  const [playerX, playerY] = player.position;
-  const [appleX, appleY] = apple.position;
+export const hasPlayerHitApple: Predicate<Game> = ({ player, apple }) =>
+  eqPosition.equals(player.position, apple.position);
 
-  return playerX === appleX && playerY === appleY;
-}
-
-const hasPlayerFailed = (game: Game) =>
-  hasPlayerHitTail(game) || hasPlayerHitBoard(game);
+const hasPlayerFailed = pipe(hasPlayerHitTail, or(hasPlayerHitBoard));
 
 const movePlayerInGame = (game: Game): Game => ({
   ...game,
@@ -236,6 +235,9 @@ const checkGameOver = (game: Game): Game =>
     O.getOrElse(() => game)
   );
 
+export const nextGameState = (game: Game): Game =>
+  pipe(game, movePlayerInGame, checkApple, checkGameOver);
+
 export const tailDirection = (player: Player): O.Option<PlayerDirection> => {
   if (!player.tail) return O.none;
 
@@ -248,33 +250,31 @@ export const tailDirection = (player: Player): O.Option<PlayerDirection> => {
 
   if (playerY > tailY) return O.some(PlayerDirection.DOWN);
 
-  return O.some(PlayerDirection.UP);
-};
+  if (playerY < tailY) return O.some(PlayerDirection.UP);
 
-export const nextGameState = (game: Game): Game =>
-  pipe(game, movePlayerInGame, checkApple, checkGameOver);
+  return O.none;
+};
 
 export function tiles(game: Game): Array<Array<Tile>> {
   const { board, player, apple } = game;
 
-  const [playerX, playerY] = player.position;
-  const [appleX, appleY] = apple.position;
-
   return [...new Array(board.rows)].map((_, y) =>
     [...new Array(board.columns)].map((_, x) => {
-      if (playerX === x && playerY === y) {
+      const currentPosition: Position = [x, y];
+
+      if (eqPosition.equals(player.position, currentPosition)) {
         return Tile.SnakeHead;
       }
 
       if (
-        playerPositions(player.tail).some(
-          ([tailX, tailY]) => tailX === x && tailY === y
+        playerPositions(player.tail).some((tailPosition) =>
+          eqPosition.equals(tailPosition, currentPosition)
         )
       ) {
         return Tile.SnakeTail;
       }
 
-      if (appleX === x && appleY === y) {
+      if (eqPosition.equals(apple.position, currentPosition)) {
         return Tile.Apple;
       }
 
