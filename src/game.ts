@@ -1,6 +1,5 @@
 import { pipe } from "fp-ts/lib/function";
 import * as O from "fp-ts/lib/Option";
-import { not } from "fp-ts/lib/Predicate";
 import { random } from "./utils";
 
 /*
@@ -47,23 +46,21 @@ export const PlayerDirectionsArray = [
 ];
 
 export type Player = {
-  x: number;
-  y: number;
+  position: Position;
   direction: PlayerDirection;
   tail?: Player;
   previousState?: Player;
 };
 
 export type Apple = {
-  x: number;
-  y: number;
+  position: Position;
 };
 
 export type Game = {
   board: Board;
   player: Player;
   apple: Apple;
-  gameOver?: boolean;
+  gameOver: boolean;
 };
 
 export function createGame(
@@ -76,15 +73,19 @@ export function createGame(
     columns,
     rows,
   };
+
   const player = createPlayer(board);
 
-  // createApple will replace apple position
-  const apple = createApple({ board, player, apple: { x: 0, y: 0 } });
+  const apple = createApple({
+    board,
+    player,
+  });
 
   return {
     board,
     apple,
     player,
+    gameOver: false,
   };
 }
 
@@ -97,20 +98,21 @@ export function createBoard(
   };
 }
 
+export function randomPosition(board: Board): Position {
+  return [random(0, board.columns - 1), random(0, board.rows - 1)];
+}
+
 export function createPlayer(board: Board): Player {
   return {
-    x: random(0, board.columns - 1),
-    y: random(0, board.rows - 1),
+    position: randomPosition(board),
     direction: PlayerDirectionsArray[random(0, 3)],
   };
 }
 
-export function playerPositions(
-  player?: Player
-): Array<[x: number, y: number]> {
+export function playerPositions(player?: Player): Array<Position> {
   if (!player) return [];
 
-  return [[player.x, player.y], ...playerPositions(player.tail)];
+  return [player.position, ...playerPositions(player.tail)];
 }
 
 export function isPositionOcuppiedByPlayer(
@@ -122,37 +124,39 @@ export function isPositionOcuppiedByPlayer(
   return positions.some(([pX, pY]) => pX === x && pY === y);
 }
 
-export function createApple(game: Game): Apple {
+export function createApple(game: Pick<Game, "board" | "player">): Apple {
   const { board, player } = game;
 
-  const x = random(0, board.columns - 1);
-  const y = random(0, board.rows - 1);
+  const position = randomPosition(board);
 
-  if (isPositionOcuppiedByPlayer(player, [x, y])) {
+  if (isPositionOcuppiedByPlayer(player, position)) {
     return createApple(game);
   }
 
-  return {
-    x,
-    y,
-  };
+  return { position };
+}
+
+function nextPlayerPosition(player: Player): Position {
+  const [playerX, playerY] = player.position;
+
+  return [
+    player.direction === PlayerDirection.LEFT
+      ? playerX - 1
+      : player.direction === PlayerDirection.RIGHT
+      ? playerX + 1
+      : playerX,
+    player.direction === PlayerDirection.UP
+      ? playerY - 1
+      : player.direction === PlayerDirection.DOWN
+      ? playerY + 1
+      : playerY,
+  ];
 }
 
 export function movePlayer(player: Player): Player {
   return {
     ...player,
-    x:
-      player.direction === PlayerDirection.LEFT
-        ? player.x - 1
-        : player.direction === PlayerDirection.RIGHT
-        ? player.x + 1
-        : player.x,
-    y:
-      player.direction === PlayerDirection.UP
-        ? player.y - 1
-        : player.direction === PlayerDirection.DOWN
-        ? player.y + 1
-        : player.y,
+    position: nextPlayerPosition(player),
     previousState: { ...player },
     tail: player.tail
       ? movePlayer({
@@ -163,19 +167,30 @@ export function movePlayer(player: Player): Player {
   };
 }
 
-const hasPlayerHitTail = ({ player }: Game): boolean =>
-  playerPositions(player.tail).some(
-    ([x, y]) => player.x === x && player.y === y
-  );
+const hasPlayerHitTail = ({
+  player: {
+    tail,
+    position: [playerX, playerY],
+  },
+}: Game): boolean =>
+  playerPositions(tail).some(([x, y]) => playerX === x && playerY === y);
 
-const hasPlayerHitBoard = ({ player, board }: Game): boolean =>
-  player.x <= 0 ||
-  player.x >= board.columns ||
-  player.y <= 0 ||
-  player.y >= board.rows;
+const hasPlayerHitBoard = ({
+  player: {
+    position: [playerX, playerY],
+  },
+  board,
+}: Game): boolean =>
+  playerX < 0 ||
+  playerX >= board.columns ||
+  playerY < 0 ||
+  playerY >= board.rows;
 
 export function hasPlayerHitApple({ player, apple }: Game): boolean {
-  return player.x === apple.x && player.y === apple.y;
+  const [playerX, playerY] = player.position;
+  const [appleX, appleY] = apple.position;
+
+  return playerX === appleX && playerY === appleY;
 }
 
 const hasPlayerFailed = (game: Game) =>
@@ -221,14 +236,33 @@ const checkGameOver = (game: Game): Game =>
     O.getOrElse(() => game)
   );
 
+export const tailDirection = (player: Player): O.Option<PlayerDirection> => {
+  if (!player.tail) return O.none;
+
+  const [playerX, playerY] = player.position;
+  const [tailX, tailY] = player.tail.position;
+
+  if (playerX > tailX) return O.some(PlayerDirection.LEFT);
+
+  if (playerX < tailX) return O.some(PlayerDirection.RIGHT);
+
+  if (playerY > tailY) return O.some(PlayerDirection.DOWN);
+
+  return O.some(PlayerDirection.UP);
+};
+
 export const nextGameState = (game: Game): Game =>
   pipe(game, movePlayerInGame, checkApple, checkGameOver);
 
 export function tiles(game: Game): Array<Array<Tile>> {
   const { board, player, apple } = game;
+
+  const [playerX, playerY] = player.position;
+  const [appleX, appleY] = apple.position;
+
   return [...new Array(board.rows)].map((_, y) =>
     [...new Array(board.columns)].map((_, x) => {
-      if (player.x === x && player.y === y) {
+      if (playerX === x && playerY === y) {
         return Tile.SnakeHead;
       }
 
@@ -240,7 +274,7 @@ export function tiles(game: Game): Array<Array<Tile>> {
         return Tile.SnakeTail;
       }
 
-      if (apple.x === x && apple.y === y) {
+      if (appleX === x && appleY === y) {
         return Tile.Apple;
       }
 
