@@ -191,7 +191,7 @@ const setGameOver = (game: Game): Game => ({
   gameOver: true,
 });
 
-const playerAddTail = (game: Game): Game => ({
+const addTail = (game: Game): Game => ({
   ...game,
   player: {
     ...game.player,
@@ -208,7 +208,7 @@ const checkApple = (game: Game): Game =>
   pipe(
     game,
     O.fromPredicate(hasPlayerHitApple),
-    O.map(playerAddTail),
+    O.map(addTail),
     O.map(newApplePosition),
     O.getOrElse(() => game)
   );
