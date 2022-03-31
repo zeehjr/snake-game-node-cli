@@ -1,4 +1,10 @@
-import { createGame, tiles, Tile, nextFrame, PlayerDirection } from "./game";
+import {
+  createGame,
+  tiles,
+  Tile,
+  nextGameState,
+  PlayerDirection,
+} from "./game";
 import * as readline from "readline";
 import chalk from "chalk";
 
@@ -66,7 +72,7 @@ setInterval(() => {
   draw(tiles(game), previousTiles);
 
   previousTiles = tiles(game);
-  game = nextFrame(game);
+  game = nextGameState(game);
 }, 50);
 
 process.stdout.on("resize", () => {

@@ -1,3 +1,6 @@
+import { pipe } from "fp-ts/lib/function";
+import * as O from "fp-ts/lib/Option";
+import { not } from "fp-ts/lib/Predicate";
 import { random } from "./utils";
 
 /*
@@ -178,32 +181,48 @@ export function hasPlayerHitApple({ player, apple }: Game): boolean {
 const hasPlayerFailed = (game: Game) =>
   hasPlayerHitTail(game) || hasPlayerHitBoard(game);
 
-export function nextFrame(game: Game): Game {
-  const { player, gameOver } = game;
+const movePlayerInGame = (game: Game): Game => ({
+  ...game,
+  player: movePlayer(game.player),
+});
 
-  if (gameOver) return game;
+const setGameOver = (game: Game): Game => ({
+  ...game,
+  gameOver: true,
+});
 
-  const newGame = { ...game, player: movePlayer(player) };
+const playerAddTail = (game: Game): Game => ({
+  ...game,
+  player: {
+    ...game.player,
+    tail: game.player.previousState ? { ...game.player.previousState } : void 0,
+  },
+});
 
-  if (hasPlayerFailed(newGame)) {
-    return {
-      // Return game instead of newGame because this can be Game Over screen,
-      // so the snake head will not hide the object it hit.
-      ...game,
-      gameOver: true,
-    };
-  }
+const newApplePosition = (game: Game): Game => ({
+  ...game,
+  apple: createApple(game),
+});
 
-  if (hasPlayerHitApple(newGame)) {
-    return {
-      ...newGame,
-      player: { ...newGame.player, tail: { ...player } },
-      apple: createApple(newGame),
-    };
-  }
+const checkApple = (game: Game): Game =>
+  pipe(
+    game,
+    O.fromPredicate(hasPlayerHitApple),
+    O.map(playerAddTail),
+    O.map(newApplePosition),
+    O.getOrElse(() => game)
+  );
 
-  return newGame;
-}
+const checkGameOver = (game: Game): Game =>
+  pipe(
+    game,
+    O.fromPredicate(hasPlayerFailed),
+    O.map(setGameOver),
+    O.getOrElse(() => game)
+  );
+
+export const nextGameState = (game: Game): Game =>
+  pipe(game, movePlayerInGame, checkApple, checkGameOver);
 
 export function tiles(game: Game): Array<Array<Tile>> {
   const { board, player, apple } = game;
