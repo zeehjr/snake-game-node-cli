@@ -4,6 +4,7 @@ import {
   Tile,
   nextGameState,
   PlayerDirection,
+  tailDirection,
 } from "./game";
 import * as readline from "readline";
 import chalk from "chalk";
@@ -16,10 +17,10 @@ let game = createGame({
 });
 
 const SPRITE: { [key in Tile]: string } = {
-  [Tile.Ground]: chalk.bgBlue("  "),
+  [Tile.Ground]: chalk.bgGreen("  "),
   [Tile.SnakeHead]: chalk.bgYellow("  "),
   [Tile.Apple]: chalk.bgRed("  "),
-  [Tile.SnakeTail]: chalk.bgGreen("  "),
+  [Tile.SnakeTail]: chalk.bgBlue("  "),
 };
 
 const draw = (
@@ -89,54 +90,34 @@ process.stdout.on("resize", () => {
 
 process.stdin.setEncoding("utf-8");
 
+const directionByInputKeyName = (input: string): PlayerDirection => {
+  switch (input) {
+    case "up":
+      return PlayerDirection.UP;
+    case "left":
+      return PlayerDirection.LEFT;
+    case "down":
+      return PlayerDirection.DOWN;
+    case "right":
+      return PlayerDirection.RIGHT;
+    default:
+      return PlayerDirection.UP;
+  }
+};
+
 process.stdin.on("keypress", (e, key) => {
-  const previousDirection = game.player.previousState?.direction;
+  const forbiddenDirection = tailDirection(game.player);
+  const newDirection = directionByInputKeyName(key.name);
 
-  if (key.name === "up") {
-    if (
-      previousDirection === PlayerDirection.UP ||
-      previousDirection === PlayerDirection.DOWN
-    )
-      return;
-    game = {
-      ...game,
-      player: { ...game.player, direction: PlayerDirection.UP },
-    };
+  if (
+    forbiddenDirection._tag === "Some" &&
+    forbiddenDirection.value === newDirection
+  ) {
+    return;
   }
 
-  if (key.name === "down") {
-    if (
-      previousDirection === PlayerDirection.UP ||
-      previousDirection === PlayerDirection.DOWN
-    )
-      return;
-    game = {
-      ...game,
-      player: { ...game.player, direction: PlayerDirection.DOWN },
-    };
-  }
-
-  if (key.name === "left") {
-    if (
-      previousDirection === PlayerDirection.LEFT ||
-      previousDirection === PlayerDirection.RIGHT
-    )
-      return;
-    game = {
-      ...game,
-      player: { ...game.player, direction: PlayerDirection.LEFT },
-    };
-  }
-
-  if (key.name === "right") {
-    if (
-      previousDirection === PlayerDirection.LEFT ||
-      previousDirection === PlayerDirection.RIGHT
-    )
-      return;
-    game = {
-      ...game,
-      player: { ...game.player, direction: PlayerDirection.RIGHT },
-    };
-  }
+  game = {
+    ...game,
+    player: { ...game.player, direction: newDirection },
+  };
 });
