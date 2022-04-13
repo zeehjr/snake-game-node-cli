@@ -1,9 +1,8 @@
-import { pipe } from "fp-ts/lib/function";
-import * as O from "fp-ts/lib/Option";
-import * as Eq from "fp-ts/lib/Eq";
+import { flow, pipe } from "fp-ts/lib/function";
 import * as N from "fp-ts/lib/number";
 import { random } from "./utils";
-import { and, or, Predicate } from "fp-ts/lib/Predicate";
+import { or, Predicate } from "fp-ts/lib/Predicate";
+import { eq, option } from "fp-ts";
 
 /*
   TODO:
@@ -20,9 +19,12 @@ import { and, or, Predicate } from "fp-ts/lib/Predicate";
   - Refactor with better practices
 */
 
+// Try semigroups https://dev.to/gcanti/getting-started-with-fp-ts-semigroup-2mf7
+// Categories, applicatives, monads
+
 export type Position = [x: number, y: number];
 
-const eqPosition = Eq.tuple<Position>(N.Eq, N.Eq);
+const eqPosition = eq.tuple<Position>(N.Eq, N.Eq);
 
 export enum Tile {
   Ground = 0,
@@ -122,12 +124,12 @@ export function playerPositions(player?: Player): Array<Position> {
 
 export function isPositionOcuppiedByPlayer(
   player: Player,
-  [x, y]: [x: number, y: number]
+  position: Position
 ): boolean {
   const positions = playerPositions(player);
 
-  return positions.some((position) =>
-    eqPosition.equals(player.position, position)
+  return positions.some((playerPosition) =>
+    eqPosition.equals(position, playerPosition)
   );
 }
 
@@ -193,7 +195,10 @@ const hasPlayerHitBoard = ({
 export const hasPlayerHitApple: Predicate<Game> = ({ player, apple }) =>
   eqPosition.equals(player.position, apple.position);
 
-const hasPlayerFailed = pipe(hasPlayerHitTail, or(hasPlayerHitBoard));
+const hasPlayerFailed: Predicate<Game> = pipe(
+  hasPlayerHitTail,
+  or(hasPlayerHitBoard)
+);
 
 const movePlayerInGame = (game: Game): Game => ({
   ...game,
@@ -221,38 +226,39 @@ const newApplePosition = (game: Game): Game => ({
 const checkApple = (game: Game): Game =>
   pipe(
     game,
-    O.fromPredicate(hasPlayerHitApple),
-    O.map(addTail),
-    O.map(newApplePosition),
-    O.getOrElse(() => game)
+    option.fromPredicate(hasPlayerHitApple),
+    option.map(addTail),
+    option.map(newApplePosition),
+    option.getOrElse(() => game)
   );
 
 const checkGameOver = (game: Game): Game =>
   pipe(
     game,
-    O.fromPredicate(hasPlayerFailed),
-    O.map(setGameOver),
-    O.getOrElse(() => game)
+    option.fromPredicate(hasPlayerFailed),
+    option.map(setGameOver),
+    option.getOrElse(() => game)
   );
 
-export const nextGameState = (game: Game): Game =>
-  pipe(game, movePlayerInGame, checkApple, checkGameOver);
+export const nextGameState = flow(movePlayerInGame, checkApple, checkGameOver);
 
-export const tailDirection = (player: Player): O.Option<PlayerDirection> => {
-  if (!player.tail) return O.none;
+export const tailDirection = (
+  player: Player
+): option.Option<PlayerDirection> => {
+  if (!player.tail) return option.none;
 
   const [playerX, playerY] = player.position;
   const [tailX, tailY] = player.tail.position;
 
-  if (playerX > tailX) return O.some(PlayerDirection.LEFT);
+  if (playerX > tailX) return option.some(PlayerDirection.LEFT);
 
-  if (playerX < tailX) return O.some(PlayerDirection.RIGHT);
+  if (playerX < tailX) return option.some(PlayerDirection.RIGHT);
 
-  if (playerY > tailY) return O.some(PlayerDirection.DOWN);
+  if (playerY > tailY) return option.some(PlayerDirection.DOWN);
 
-  if (playerY < tailY) return O.some(PlayerDirection.UP);
+  if (playerY < tailY) return option.some(PlayerDirection.UP);
 
-  return O.none;
+  return option.none;
 };
 
 export function tiles(game: Game): Array<Array<Tile>> {
